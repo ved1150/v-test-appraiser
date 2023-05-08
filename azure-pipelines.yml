@@ -1,0 +1,55 @@
+# Starter pipeline
+# Start with a minimal pipeline that you can customize to build and deploy your code.
+# Add steps that build, run tests, deploy, and more:
+# https://aka.ms/yaml
+
+trigger:
+- develop
+
+resources:
+- repo: self
+
+variables:
+  buildId: '$(Build.BuildId)'
+  tag: 'dev'
+  repository: 'vsite-web-appraiser'
+  container: 'web_appraiser'
+
+pool: Default
+
+stages:
+- stage: Build
+  displayName: Build image
+  jobs:
+  - job: Build
+    displayName: Build image
+    steps:
+    - task: S3Download@1
+      inputs:
+        awsCredentials: 'ss-dev-connection'
+        regionName: 'us-east-2'
+        bucketName: 'vsite-fe-configs'
+        globExpressions: '.env.appraiser.dev'
+        targetFolder: '.'
+        logRequest: true
+        logResponse: true
+    - task: CmdLine@2
+      inputs:
+        script: 'pwd && ls -a && mv .env.appraiser.dev .env'
+    - task: Docker@2
+      displayName: Build an image
+      inputs:
+        repository: '$(repository)'
+        command: 'build'
+        Dockerfile: '**/Dockerfile'
+        tags: '$(tag)'    
+
+- stage: Deploy
+  displayName: Deploy to nginx
+  jobs:
+  - job: Deploy
+    displayName: Deploy
+    steps:
+    - task: CmdLine@2
+      inputs:
+        script: 'cd /home/ubuntu/deployments/ && docker-compose down && docker volume rm web_appraiser_static && docker-compose up -d'
